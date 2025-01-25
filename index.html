@@ -269,9 +269,9 @@
 
         async function fetchCatNames() {
             try {
-                // メッセージを取得（created_atの降順）
-                const response = await fetch(
-                    `${SUPABASE_URL}/rest/v1/messages?select=*&order=created_at.desc`,
+                // メッセージとレス数を一緒に取得
+                const messagesResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/messages?select=*`,
                     {
                         headers: {
                             'apikey': SUPABASE_KEY,
@@ -280,31 +280,51 @@
                     }
                 );
 
-                if (!response.ok) {
+                if (!messagesResponse.ok) {
                     throw new Error('データの取得に失敗しました');
                 }
 
-                const messages = await response.json();
+                const messages = await messagesResponse.json();
+
+                // 各メッセージのレス数を取得
+                const messagesWithReplies = await Promise.all(
+                    messages.map(async (message) => {
+                        const replies = await fetchReplies(message.id);
+                        return {
+                            ...message,
+                            replies,
+                            replyCount: replies.length
+                        };
+                    })
+                );
+
+                // レス数と投稿日時でソート
+                messagesWithReplies.sort((a, b) => {
+                    if (a.replyCount !== b.replyCount) {
+                        return b.replyCount - a.replyCount; // レス数の多い順
+                    }
+                    return new Date(b.created_at) - new Date(a.created_at); // 同じレス数なら新しい順
+                });
+
                 const catList = document.getElementById('catList');
                 
-                if (messages.length === 0) {
+                if (messagesWithReplies.length === 0) {
                     catList.innerHTML = '<div class="cat-item">まだ猫の名前が登録されていません</div>';
                     return;
                 }
 
                 let html = '';
-                for (const item of messages) {
+                for (const item of messagesWithReplies) {
                     const date = new Date(item.created_at).toLocaleString('ja-JP');
-                    const replies = await fetchReplies(item.id);
                     
                     html += `
                         <div class="cat-item">
                             <div class="cat-name">${item.content}</div>
                             <div class="timestamp">登録日時: ${date}</div>
-                            <div class="cat-id">ID: ${item.id} | 返信数: ${replies.length}</div>
+                            <div class="cat-id">ID: ${item.id} | 返信数: ${item.replyCount}</div>
                             
                             <div class="reply-section">
-                                ${replies.map(reply => `
+                                ${item.replies.map(reply => `
                                     <div class="reply-item">
                                         <div>${reply.content}</div>
                                         <div class="timestamp">
