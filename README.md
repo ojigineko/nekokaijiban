@@ -4,7 +4,8 @@
 
 ## デモ
 
-https://ojigineko.github.io/nekokaijiban/
+- GitHub Pages: https://ojigineko.github.io/nekokaijiban/
+- Vercel: https://nekokaijiban.vercel.app/
 
 ## 機能
 
