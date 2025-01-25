@@ -62,9 +62,6 @@
         .cat-item {
             padding: 15px;
             border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         .cat-item:last-child {
             border-bottom: none;
@@ -72,6 +69,7 @@
         .cat-name {
             font-size: 1.2em;
             color: #444;
+            margin-bottom: 5px;
         }
         .cat-id {
             color: #888;
@@ -80,6 +78,7 @@
         .timestamp {
             color: #999;
             font-size: 0.8em;
+            margin-bottom: 10px;
         }
         .loading {
             text-align: center;
@@ -97,6 +96,38 @@
             padding: 10px;
             margin-top: 10px;
             display: none;
+        }
+        .reply-section {
+            margin-left: 20px;
+            padding-left: 10px;
+            border-left: 3px solid #e0e0e0;
+        }
+        .reply-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .reply-form {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .reply-form input {
+            flex: 1;
+        }
+        .reply-form button {
+            padding: 5px 15px;
+            font-size: 0.9em;
+        }
+        .reply-toggle {
+            color: #4CAF50;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .reply-toggle:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -169,6 +200,73 @@
             }
         }
 
+        async function addReply(messageId) {
+            const input = document.getElementById(`replyInput-${messageId}`);
+            const button = document.getElementById(`replyButton-${messageId}`);
+            const replyText = input.value.trim();
+
+            if (!replyText) {
+                alert('返信を入力してください');
+                return;
+            }
+
+            button.disabled = true;
+            
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/replies`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({
+                            message_id: messageId,
+                            content: replyText
+                        })
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error('返信の追加に失敗しました');
+                }
+
+                input.value = '';
+                fetchCatNames();
+
+            } catch (error) {
+                alert(`エラーが発生しました: ${error.message}`);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function fetchReplies(messageId) {
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/replies?select=*&message_id=eq.${messageId}&order=created_at.asc`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error('返信の取得に失敗しました');
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error(`返信の取得でエラーが発生しました: ${error.message}`);
+                return [];
+            }
+        }
+
         async function fetchCatNames() {
             try {
                 const response = await fetch(
@@ -193,18 +291,41 @@
                     return;
                 }
 
-                catList.innerHTML = data.map(item => {
+                let html = '';
+                for (const item of data) {
                     const date = new Date(item.created_at).toLocaleString('ja-JP');
-                    return `
+                    const replies = await fetchReplies(item.id);
+                    
+                    html += `
                         <div class="cat-item">
-                            <div>
-                                <div class="cat-name">${item.content}</div>
-                                <div class="timestamp">登録日時: ${date}</div>
-                            </div>
+                            <div class="cat-name">${item.content}</div>
+                            <div class="timestamp">登録日時: ${date}</div>
                             <div class="cat-id">ID: ${item.id}</div>
+                            
+                            <div class="reply-section">
+                                ${replies.map(reply => `
+                                    <div class="reply-item">
+                                        <div>${reply.content}</div>
+                                        <div class="timestamp">
+                                            ${new Date(reply.created_at).toLocaleString('ja-JP')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                
+                                <div class="reply-form">
+                                    <input type="text" id="replyInput-${item.id}" 
+                                           placeholder="返信を入力" />
+                                    <button id="replyButton-${item.id}"
+                                            onclick="addReply(${item.id})">
+                                        返信
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     `;
-                }).join('');
+                }
+                
+                catList.innerHTML = html;
 
             } catch (error) {
                 document.getElementById('catList').innerHTML = `
