@@ -269,8 +269,9 @@
 
         async function fetchCatNames() {
             try {
+                // まずメッセージとレス数を取得
                 const response = await fetch(
-                    `${SUPABASE_URL}/rest/v1/messages?select=*&order=created_at.desc`,
+                    `${SUPABASE_URL}/rest/v1/messages?select=*,replies(count)&order=replies(count).desc.nullslast,created_at.desc`,
                     {
                         headers: {
                             'apikey': SUPABASE_KEY,
@@ -295,12 +296,13 @@
                 for (const item of data) {
                     const date = new Date(item.created_at).toLocaleString('ja-JP');
                     const replies = await fetchReplies(item.id);
+                    const replyCount = replies.length;
                     
                     html += `
                         <div class="cat-item">
                             <div class="cat-name">${item.content}</div>
                             <div class="timestamp">登録日時: ${date}</div>
-                            <div class="cat-id">ID: ${item.id}</div>
+                            <div class="cat-id">ID: ${item.id} | 返信数: ${replyCount}</div>
                             
                             <div class="reply-section">
                                 ${replies.map(reply => `
