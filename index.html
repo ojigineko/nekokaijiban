@@ -269,7 +269,7 @@
 
         async function fetchCatNames() {
             try {
-                // メッセージとレス数を一緒に取得
+                // メッセージを取得
                 const messagesResponse = await fetch(
                     `${SUPABASE_URL}/rest/v1/messages?select=*`,
                     {
@@ -286,24 +286,27 @@
 
                 const messages = await messagesResponse.json();
 
-                // 各メッセージのレス数を取得
+                // 各メッセージのレスと最新レス時間を取得
                 const messagesWithReplies = await Promise.all(
                     messages.map(async (message) => {
                         const replies = await fetchReplies(message.id);
+                        const latestReplyTime = replies.length > 0 
+                            ? new Date(replies[0].created_at).getTime()
+                            : 0;
                         return {
                             ...message,
                             replies,
-                            replyCount: replies.length
+                            replyCount: replies.length,
+                            latestReplyTime
                         };
                     })
                 );
 
-                // レス数と投稿日時でソート
+                // 最新レス時間でソート（レスがない場合は投稿時間を使用）
                 messagesWithReplies.sort((a, b) => {
-                    if (a.replyCount !== b.replyCount) {
-                        return b.replyCount - a.replyCount; // レス数の多い順
-                    }
-                    return new Date(b.created_at) - new Date(a.created_at); // 同じレス数なら新しい順
+                    const timeA = a.latestReplyTime || new Date(a.created_at).getTime();
+                    const timeB = b.latestReplyTime || new Date(b.created_at).getTime();
+                    return timeB - timeA; // 新しい順
                 });
 
                 const catList = document.getElementById('catList');
@@ -316,12 +319,15 @@
                 let html = '';
                 for (const item of messagesWithReplies) {
                     const date = new Date(item.created_at).toLocaleString('ja-JP');
+                    const lastActivity = item.latestReplyTime 
+                        ? new Date(item.latestReplyTime).toLocaleString('ja-JP')
+                        : date;
                     
                     html += `
                         <div class="cat-item">
                             <div class="cat-name">${item.content}</div>
                             <div class="timestamp">登録日時: ${date}</div>
-                            <div class="cat-id">ID: ${item.id} | 返信数: ${item.replyCount}</div>
+                            <div class="cat-id">ID: ${item.id} | 返信数: ${item.replyCount} | 最終更新: ${lastActivity}</div>
                             
                             <div class="reply-section">
                                 ${item.replies.map(reply => `
